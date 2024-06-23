@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Previsione Azioni AI</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.3.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .prediction-section {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #loading {
+            display: none;
+            font-weight: bold;
+            color: red;
+        }
+        #log {
+            white-space: pre-wrap;
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        nav {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <a class="navbar-brand" href="#">Previsione Azioni AI</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav mr-auto">
+                <li class="nav-item"><a class="nav-link" href="#">Home</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Analisi</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Storico</a></li>
+                <li class="nav-item"><a class="nav-link" href="#">Informazioni</a></li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container">
+        <h1>Previsione Azioni AI</h1>
+        <input type="text" id="stockSymbol" class="form-control" placeholder="Inserisci il simbolo dell'azione (es. AAPL)">
+        <button class="btn btn-primary" onclick="predictStock()">Analizza</button>
+        <button class="btn btn-secondary" onclick="viewHistoricalAnalyses()">Visualizza Analisi Storiche</button>
+        
+        <div id="loading">Caricamento...</div>
+        <pre id="log"></pre>
+        
+        <div id="results">
+            <div class="prediction-section">
+                <h2>Grafico Storico e Previsione</h2>
+                <canvas id="stockChart"></canvas>
+            </div>
+            <div class="prediction-section">
+                <h2>Analisi Tecnica</h2>
+                <p id="technicalAnalysis"></p>
+            </div>
+            <div class="prediction-section">
+                <h2>Analisi del Sentiment</h2>
+                <p id="sentimentAnalysis"></p>
+            </div>
+            <div class="prediction-section">
+                <h2>Raccomandazioni</h2>
+                <p id="recommendations"></p>
+            </div>
+            <div class="prediction-section">
+                <h2>Precisione della Previsione</h2>
+                <p id="accuracy"></p>
+            </div>
+            <div class="prediction-section">
+                <h2>Comparazione Azioni</h2>
+                <input type="text" id="compareStockSymbols" class="form-control" placeholder="Inserisci simboli da comparare (es. AAPL, GOOGL)">
+                <button class="btn btn-info" onclick="compareStocks()">Comparare</button>
+                <canvas id="compareChart"></canvas>
+            </div>
+            <div class="prediction-section">
+                <h2>Scarica Report</h2>
+                <button class="btn btn-success" onclick="downloadReport()">Scarica Report PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChart;
+
+        function logMessage(message) {
+            const log = document.getElementById('log');
+            log.textContent += `${message}\n`;
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function viewHistoricalAnalyses() {
+            window.location.href = 'historical_analyses.html';
+        }
+
+        async function predictStock() {
+            clearLog();
+            document.getElementById('loading').style.display = 'block';
+            logMessage("Inizio analisi azione...");
+
+            const symbol = document.getElementById('stockSymbol').value;
+            logMessage(`Simbolo inserito: ${symbol}`);
+            
+            try {
+                const historicalData = await fetchHistoricalData(symbol);
+                logMessage("Dati storici ricevuti.");
+                
+                const [trainData, testData] = splitData(historicalData);
+                logMessage("Dati storici divisi in train e test.");
+                
+                const prediction = await trainAndPredict(trainData, testData);
+                logMessage("Previsione completata.");
+                
+                const technicalIndicators = calculateTechnicalIndicators(historicalData);
+                logMessage("Calcolo indicatori tecnici completato.");
+                
+                const sentimentAnalysis = await analyzeSentiment(symbol);
+                logMessage("Analisi del sentiment completata.");
+                
+                const recommendations = generateRecommendations(prediction, technicalIndicators, sentimentAnalysis);
+                logMessage("Generazione raccomandazioni completata.");
+                
+                const accuracy = calculateAccuracy(testData, prediction.slice(0, testData.length));
+                logMessage("Calcolo accuratezza completato.");
+                
+                updateUI(symbol, historicalData, prediction, technicalIndicators, sentimentAnalysis, recommendations, accuracy);
+                logMessage("Aggiornamento UI completato.");
+                
+                saveHistoricalAnalysis(symbol, historicalData, prediction, technicalIndicators, sentimentAnalysis, recommendations, accuracy);
+                logMessage("Analisi salvata.");
+            } catch (error) {
+                logMessage(`Errore: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                logMessage("Analisi azione completata.");
+            }
+        }
+
+        async function fetchHistoricalData(symbol) {
+            logMessage(`Richiesta dati storici per ${symbol}...`);
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/api/historical_data?symbol=${symbol}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                logMessage("Dati storici ricevuti dal server.");
+                return data.map(item => ({
+                    date: new Date(item.Date),
+                    price: item.Close
+                }));
+            } catch (error) {
+                logMessage(`Errore durante il fetch: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function splitData(data) {
+            const splitIndex = Math.floor(data.length * 0.8);
+            return [data.slice(0, splitIndex), data.slice(splitIndex)];
+        }
+
+        async function trainAndPredict(trainData, testData) {
+            logMessage("Inizio training e previsione...");
+
+            const X = trainData.map((d, i) => i);
+            const y = trainData.map(d => d.price);
+
+            const xMin = Math.min(...X);
+            const xMax = Math.max(...X);
+            const yMin = Math.min(...y);
+            const yMax = Math.max(...y);
+
+            const xNorm = X.map(x => (x - xMin) / (xMax - xMin));
+            const yNorm = y.map(y => (y - yMin) / (yMax - yMin));
+
+            const model = tf.sequential();
+            model.add(tf.layers.dense({units: 1, inputShape: [1]}));
+
+            model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
+
+            const xs = tf.tensor2d(xNorm, [xNorm.length, 1]);
+            const ys = tf.tensor2d(yNorm, [yNorm.length, 1]);
+
+            await model.fit(xs, ys, {epochs: 100});
+            logMessage("Training completato.");
+
+            const lastDay = xNorm.length;
+            const futureDays = testData.length + 30;
+            const xFuture = tf.tensor2d([...Array(futureDays)].map((_, i) => (lastDay + i - xMin) / (xMax - xMin)), [futureDays, 1]);
+
+            const predictions = model.predict(xFuture);
+            const predictedPrices = predictions.dataSync().map(p => p * (yMax - yMin) + yMin);
+            logMessage("Previsioni generate.");
+
+            return [...Array(futureDays)].map((_, i) => ({
+                date: new Date(trainData[trainData.length - 1].date.getTime() + (i + 1) * 24 * 60 * 60 * 1000),
+                price: predictedPrices[i]
+            }));
+        }
+
+        function calculateTechnicalIndicators(data) {
+            logMessage("Calcolo indicatori tecnici...");
+
+            const prices = data.map(d => d.price);
+
+            const sma50 = prices.slice(-50).reduce((a, b) => a + b, 0) / 50;
+
+            const changes = prices.slice(1).map((price, i) => price - prices[i]);
+            const gains = changes.filter(change => change > 0);
+            const losses = changes.filter(change => change < 0).map(Math.abs);
+            const avgGain = gains.reduce((a, b) => a + b, 0) / 14;
+            const avgLoss = losses.reduce((a, b) => a + b, 0) / 14;
+            const rs = avgGain / avgLoss;
+            const rsi = 100 - (100 / (1 + rs));
+
+            const ema12 = calculateEMA(prices, 12);
+            const ema26 = calculateEMA(prices, 26);
+            const macd = ema12 - ema26;
+            const signal = calculateEMA([...Array(14).fill(0), macd], 9);
+
+            return {
+                sma: prices[prices.length - 1] > sma50 ? "Sopra la media mobile a 50 giorni" : "Sotto la media mobile a 50 giorni",
+                rsi: rsi > 70 ? "RSI indica ipercomprato" : rsi < 30 ? "RSI indica ipervenduto" : "RSI nella zona neutra",
+                macd: macd > signal ? "MACD mostra un trend rialzista" : "MACD mostra un trend ribassista"
+            };
+        }
+
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let ema = data[0];
+            for (let i = 1; i < data.length; i++) {
+                ema = data[i] * k + ema * (1 - k);
+            }
+            return ema;
+        }
+
+        async function analyzeSentiment(symbol) {
+            logMessage("Inizio analisi del sentiment...");
+            
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/api/sentiment_analysis?symbol=${symbol}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                logMessage("Analisi del sentiment completata.");
+                
+                if (!data.articles || data.articles.length === 0) {
+                    throw new Error('Nessun articolo trovato per l\'analisi del sentiment');
+                }
+                
+                return {
+                    overall: data.overall,
+                    recentNews: data.articles[0].title
+                };
+            } catch (error) {
+                logMessage(`Errore durante l'analisi del sentiment: ${error.message}`);
+                return {
+                    overall: 'N/A',
+                    recentNews: 'Nessun articolo disponibile'
+                };
+            }
+        }
+
+        function generateRecommendations(prediction, technicalIndicators, sentiment) {
+            logMessage("Generazione raccomandazioni...");
+
+            const lastPrice = prediction[0].price;
+            const lastPredictedPrice = prediction[prediction.length - 1].price;
+            const priceTrend = lastPredictedPrice > lastPrice ? "al rialzo" : "al ribasso";
+
+            let shortTerm, mediumTerm, longTerm;
+
+            if (priceTrend === "al rialzo" && technicalIndicators.rsi !== "RSI indica ipercomprato" && sentiment.overall !== "Negativo") {
+                shortTerm = "Comprare";
+                mediumTerm = "Comprare";
+                longTerm = "Comprare con convinzione";
+            } else if (priceTrend === "al ribasso" && technicalIndicators.rsi !== "RSI indica ipervenduto" && sentiment.overall !== "Positivo") {
+                shortTerm = "Vendere";
+                mediumTerm = "Vendere";
+                longTerm = "Vendere con convinzione";
+            } else {
+                shortTerm = "Mantenere";
+                mediumTerm = "Rivalutare in base ai prossimi dati";
+                longTerm = "Considerare la diversificazione";
+            }
+
+            logMessage("Raccomandazioni generate.");
+            return { shortTerm, mediumTerm, longTerm };
+        }
+
+        function calculateAccuracy(actualData, predictedData) {
+            logMessage("Calcolo accuratezza...");
+
+            const mse = actualData.reduce((sum, actual, i) => {
+                const predicted = predictedData[i];
+                return sum + Math.pow(actual.price - predicted.price, 2);
+            }, 0) / actualData.length;
+
+            const rmse = Math.sqrt(mse);
+            const maxPrice = Math.max(...actualData.map(d => d.price));
+            const minPrice = Math.min(...actualData.map(d => d.price));
+            const priceRange = maxPrice - minPrice;
+
+            const nrmse = rmse / priceRange;
+            const accuracy = (1 - nrmse) * 100;
+
+            logMessage("Accuratezza calcolata.");
+            return accuracy.toFixed(2);
+        }
+
+        function updateUI(symbol, historicalData, prediction, technicalIndicators, sentiment, recommendations, accuracy) {
+            logMessage("Aggiornamento UI...");
+
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            const ctx = document.getElementById('stockChart').getContext('2d');
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [...historicalData, ...prediction].map(d => d.date.toLocaleDateString()),
+                    datasets: [{
+                        label: 'Prezzo Storico',
+                        data: historicalData.map(d => d.price),
+                        borderColor: 'blue',
+                        fill: false
+                    }, {
+                        label: 'Previsione',
+                        data: [...Array(historicalData.length).fill(null), ...prediction.map(d => d.price)],
+                        borderColor: 'red',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Data'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Prezzo'
+                            }
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('technicalAnalysis').innerHTML = `
+                SMA: ${technicalIndicators.sma}<br>
+                RSI: ${technicalIndicators.rsi}<br>
+                MACD: ${technicalIndicators.macd}
+            `;
+
+            document.getElementById('sentimentAnalysis').innerHTML = `
+                Sentiment generale: ${sentiment.overall}<br>
+                Notizie recenti: ${sentiment.recentNews}
+            `;
+
+            document.getElementById('recommendations').innerHTML = `
+                Breve termine: ${recommendations.shortTerm}<br>
+                Medio termine: ${recommendations.mediumTerm}<br>
+                Lungo termine: ${recommendations.longTerm}
+            `;
+
+            document.getElementById('accuracy').innerHTML = `
+                Precisione del modello: ${accuracy}%
+            `;
+
+            logMessage("UI aggiornata.");
+        }
+
+        function saveHistoricalAnalysis(symbol, historicalData, prediction, technicalIndicators, sentiment, recommendations, accuracy) {
+            const analysis = {
+                symbol,
+                historicalData,
+                prediction,
+                technicalIndicators,
+                sentiment,
+                recommendations,
+                accuracy,
+                date: new Date().toLocaleDateString()
+            };
+
+            let analyses = JSON.parse(localStorage.getItem('historicalAnalyses')) || [];
+            analyses.push(analysis);
+            localStorage.setItem('historicalAnalyses', JSON.stringify(analyses));
+        }
+
+        async function compareStocks() {
+            const symbols = document.getElementById('compareStockSymbols').value.split(',').map(s => s.trim());
+            const datasets = [];
+            for (const symbol of symbols) {
+                try {
+                    const data = await fetchHistoricalData(symbol);
+                    datasets.push({
+                        label: symbol,
+                        data: data.map(d => d.price),
+                        borderColor: getRandomColor(),
+                        fill: false
+                    });
+                } catch (error) {
+                    logMessage(`Errore durante il fetch dei dati per ${symbol}: ${error.message}`);
+                }
+            }
+
+            if (datasets.length > 0) {
+                const ctx = document.getElementById('compareChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: datasets[0].data.map((_, i) => i),
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Giorni'
+                                }
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: 'Prezzo'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        function downloadReport() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("Previsione Azioni AI - Report", 10, 10);
+            const symbol = document.getElementById('stockSymbol').value;
+            doc.text(`Simbolo: ${symbol}`, 10, 20);
+
+            const canvas = document.getElementById('stockChart');
+            const imgData = canvas.toDataURL('image/png');
+            doc.addImage(imgData, 'PNG', 10, 30, 180, 160);
+
+            doc.save(`Report_${symbol}.pdf`);
+        }
+    </script>
+</body>
+</html>

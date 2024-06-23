@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisi Storiche</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .analysis {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Analisi Storiche</h1>
+    <button onclick="goBack()">Torna Indietro</button>
+    <div id="analyses"></div>
+
+    <script>
+        function goBack() {
+            window.location.href = 'index.html'; // Cambia con il nome del tuo file HTML principale
+        }
+
+        function loadHistoricalAnalyses() {
+            const analyses = JSON.parse(localStorage.getItem('historicalAnalyses')) || [];
+            const container = document.getElementById('analyses');
+            analyses.forEach(analysis => {
+                const analysisDiv = document.createElement('div');
+                analysisDiv.className = 'analysis';
+                analysisDiv.innerHTML = `
+                    <h2>${analysis.symbol} - ${analysis.date}</h2>
+                    <p><strong>SMA:</strong> ${analysis.technicalIndicators.sma}</p>
+                    <p><strong>RSI:</strong> ${analysis.technicalIndicators.rsi}</p>
+                    <p><strong>MACD:</strong> ${analysis.technicalIndicators.macd}</p>
+                    <p><strong>Sentiment generale:</strong> ${analysis.sentiment.overall}</p>
+                    <p><strong>Notizie recenti:</strong> ${analysis.sentiment.recentNews}</p>
+                    <p><strong>Raccomandazioni breve termine:</strong> ${analysis.recommendations.shortTerm}</p>
+                    <p><strong>Raccomandazioni medio termine:</strong> ${analysis.recommendations.mediumTerm}</p>
+                    <p><strong>Raccomandazioni lungo termine:</strong> ${analysis.recommendations.longTerm}</p>
+                    <p><strong>Precisione del modello:</strong> ${analysis.accuracy}%</p>
+                `;
+                container.appendChild(analysisDiv);
+            });
+        }
+
+        window.onload = loadHistoricalAnalyses;
+    </script>
+</body>
+</html>
