@@ -14,7 +14,7 @@ from tensorflow.keras.layers import Dense, LSTM
 app = Flask(__name__)
 CORS(app)  # Abilita CORS per tutte le route
 
-NEWS_API_KEY = '45125c308ef1479aa9bcadc970888f32'
+NEWS_API_KEY = 'YOUR_API_KEY_NEWS_API' # LINK NEWS API https://newsapi.org/
 
 @app.route('/api/historical_data')
 def get_historical_data():
